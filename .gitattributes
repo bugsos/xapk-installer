@@ -1,0 +1,10 @@
+# Windows 批处理必须用 CRLF 检出，否则 gradlew.bat 在某些 Windows 环境下会执行出错
+*.bat text eol=crlf
+gradlew text eol=lf
+
+*.sh text eol=lf
+
+# 不要对二进制做换行符转换
+*.png binary
+*.jar binary
+*.jks binary

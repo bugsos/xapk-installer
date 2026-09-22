@@ -1,0 +1,15 @@
+# 签名密钥：绝不入库
+keystore.properties
+keystore/
+*.jks
+*.keystore
+
+# 构建产物与本地环境
+build/
+.gradle/
+.kotlin/
+local.properties
+.jdk/
+.jdk-download/
+.jdk-tmp/
+.DS_Store

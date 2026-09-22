@@ -1,0 +1,20 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <!-- 包裹外形 -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M34,36 L74,36 L74,72 L34,72 Z" />
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M32,36 L54,26 L76,36 L54,46 Z" />
+
+    <!-- 向下的安装箭头 -->
+    <path
+        android:fillColor="#1565C0"
+        android:pathData="M50,45 L58,45 L58,57 L64,57 L54,67 L44,57 L50,57 Z" />
+
+</vector>
