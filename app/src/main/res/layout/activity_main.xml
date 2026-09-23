@@ -62,6 +62,13 @@
             android:layout_height="wrap_content"
             android:text="扫描 XAPK" />
 
+        <Button
+            android:id="@+id/buttonApps"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:text="已安装应用" />
+
         <TextView
             android:id="@+id/textStatus"
             android:layout_width="0dp"
@@ -84,6 +91,78 @@
         android:max="100"
         android:visibility="gone"
         tools:visibility="visible" />
+
+    <LinearLayout
+        android:id="@+id/appFilterBar"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingTop="8dp"
+        android:paddingEnd="12dp"
+        android:visibility="gone"
+        tools:visibility="visible">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="筛选"
+            android:textColor="#44506B"
+            android:textSize="13sp" />
+
+        <Button
+            android:id="@+id/buttonFilterAll"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="10dp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:paddingStart="18dp"
+            android:paddingTop="4dp"
+            android:paddingEnd="18dp"
+            android:paddingBottom="4dp"
+            android:text="全部"
+            android:textSize="13sp" />
+
+        <Button
+            android:id="@+id/buttonFilterSystem"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:paddingStart="18dp"
+            android:paddingTop="4dp"
+            android:paddingEnd="18dp"
+            android:paddingBottom="4dp"
+            android:text="系统"
+            android:textSize="13sp" />
+
+        <Button
+            android:id="@+id/buttonFilterUser"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="8dp"
+            android:minWidth="0dp"
+            android:minHeight="0dp"
+            android:paddingStart="18dp"
+            android:paddingTop="4dp"
+            android:paddingEnd="18dp"
+            android:paddingBottom="4dp"
+            android:text="用户"
+            android:textSize="13sp" />
+
+        <TextView
+            android:id="@+id/textFilterCount"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="12dp"
+            android:layout_weight="1"
+            android:textColor="#666666"
+            android:textSize="13sp"
+            tools:text="共 73 个 · 系统 68 · 用户 5" />
+    </LinearLayout>
 
     <View
         android:layout_width="match_parent"

@@ -17,6 +17,15 @@
         android:name="android.permission.READ_EXTERNAL_STORAGE"
         android:maxSdkVersion="32" />
 
+    <!--
+        列出设备上全部已安装应用的包名。
+        Android 11（API 30）起的「包可见性」过滤会让 getInstalledPackages() 默认只返回
+        过滤后的子集（实测本机 64 个包里只看得到几个），要拿完整清单必须声明这个权限。
+    -->
+    <uses-permission
+        android:name="android.permission.QUERY_ALL_PACKAGES"
+        tools:ignore="QueryAllPackagesPermission" />
+
     <application
         android:allowBackup="false"
         android:icon="@mipmap/ic_launcher"

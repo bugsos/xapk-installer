@@ -20,22 +20,45 @@ import kotlin.concurrent.thread
 class MainActivity : AppCompatActivity() {
 
     private lateinit var binding: ActivityMainBinding
-    private lateinit var adapter: XapkListAdapter
+    private lateinit var xapkAdapter: XapkListAdapter
+    private lateinit var appAdapter: AppListAdapter
+
+    /** 当前列表显示的是已安装应用（true）还是扫描到的 xapk（false） */
+    private var showingApps = false
+
+    /** 已安装应用的完整清单（筛选前的原始数据） */
+    private var allApps: List<InstalledApp> = emptyList()
+
+    private var appFilter = AppFilter.ALL
+
+    /** 已安装列表的筛选口径 */
+    private enum class AppFilter(val label: String) {
+        ALL("全部"),
+        SYSTEM("系统"),
+        USER("用户")
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        adapter = XapkListAdapter { info -> showDetail(info) }
+        xapkAdapter = XapkListAdapter { info -> showDetail(info) }
+        appAdapter = AppListAdapter { app -> openApp(app) }
         binding.recyclerView.layoutManager = LinearLayoutManager(this)
-        binding.recyclerView.adapter = adapter
 
-        binding.buttonScan.setOnClickListener { startScan() }
+        binding.buttonScan.setOnClickListener {
+            if (showingApps) showXapkList()
+            startScan()
+        }
+        binding.buttonApps.setOnClickListener { showAppList() }
         binding.buttonGrant.setOnClickListener { grantNextMissing() }
+        binding.buttonFilterAll.setOnClickListener { setAppFilter(AppFilter.ALL) }
+        binding.buttonFilterSystem.setOnClickListener { setAppFilter(AppFilter.SYSTEM) }
+        binding.buttonFilterUser.setOnClickListener { setAppFilter(AppFilter.USER) }
 
+        showXapkList()
         binding.textDeviceAbi.text = AbiCompat.deviceSummary()
-        setStatus("就绪，点「扫描 XAPK」开始", null)
     }
 
     override fun onResume() {
@@ -54,6 +77,8 @@ class MainActivity : AppCompatActivity() {
             setStatus(msg, ok)
         }
         refreshPermissionState()
+        // 装完包回到本界面时，列表要能立刻反映出来，所以每次可见都重读一次
+        if (showingApps) loadInstalledApps()
     }
 
     override fun onPause() {
@@ -143,13 +168,111 @@ class MainActivity : AppCompatActivity() {
                 binding.progressBar.isIndeterminate = false
                 binding.progressBar.visibility = View.GONE
                 binding.buttonScan.isEnabled = true
-                adapter.submit(result.items)
+                xapkAdapter.submit(result.items)
                 setStatus(
                     "扫到 ${result.items.size} 个 xapk（遍历 ${result.scannedDirs} 个目录，耗时 ${result.elapsedMs} ms）",
                     null
                 )
             }
         }
+    }
+
+    // ---------------- 列表切换 ----------------
+
+    private fun showXapkList() {
+        showingApps = false
+        binding.recyclerView.adapter = xapkAdapter
+        binding.buttonScan.alpha = 1f
+        binding.buttonApps.alpha = 0.45f
+        binding.appFilterBar.visibility = View.GONE
+        val n = xapkAdapter.itemCount
+        setStatus(
+            if (n == 0) "就绪，点「扫描 XAPK」开始" else "列表中有 $n 个 xapk",
+            null
+        )
+    }
+
+    private fun showAppList() {
+        showingApps = true
+        binding.recyclerView.adapter = appAdapter
+        binding.buttonApps.alpha = 1f
+        binding.buttonScan.alpha = 0.45f
+        binding.appFilterBar.visibility = View.VISIBLE
+        updateFilterButtons()
+        loadInstalledApps()
+    }
+
+    private fun loadInstalledApps() {
+        binding.progressBar.isIndeterminate = true
+        binding.progressBar.visibility = View.VISIBLE
+        setStatus("正在读取已安装应用…", null)
+
+        thread(name = "app-list") {
+            val list = InstalledApps.load(packageManager)
+            runOnUiThread {
+                binding.progressBar.visibility = View.GONE
+                allApps = list
+                applyAppFilter()
+            }
+        }
+    }
+
+    // ---------------- 已安装列表的筛选 ----------------
+
+    private fun setAppFilter(filter: AppFilter) {
+        if (appFilter == filter) return
+        appFilter = filter
+        updateFilterButtons()
+        applyAppFilter()
+    }
+
+    private fun updateFilterButtons() {
+        binding.buttonFilterAll.alpha = if (appFilter == AppFilter.ALL) 1f else 0.45f
+        binding.buttonFilterSystem.alpha = if (appFilter == AppFilter.SYSTEM) 1f else 0.45f
+        binding.buttonFilterUser.alpha = if (appFilter == AppFilter.USER) 1f else 0.45f
+    }
+
+    private fun applyAppFilter() {
+        val sysCount = allApps.count { it.isSystem }
+        val shown = when (appFilter) {
+            AppFilter.ALL -> allApps
+            AppFilter.SYSTEM -> allApps.filter { it.isSystem }
+            AppFilter.USER -> allApps.filter { !it.isSystem }
+        }
+        appAdapter.submit(shown)
+        binding.textFilterCount.text =
+            "共 ${allApps.size} 个 · 系统 $sysCount · 用户 ${allApps.size - sysCount}"
+        setStatus("${appFilter.label}：${shown.size} 个应用", null)
+    }
+
+    /**
+     * 启动列表里某个应用。
+     *
+     * 只在有桌面入口时才给按钮（`InstalledApp.launchable`），但这里仍然**重新解析一次** intent：
+     * 列表是上次加载的快照，期间应用可能被停用或卸载，重新解析能保证拿到的是当前状态。
+     */
+    private fun openApp(app: InstalledApp) {
+        val intent = packageManager.getLaunchIntentForPackage(app.packageName)
+        if (intent == null) {
+            // 列表是快照，走到这里说明期间应用被停用 / 卸载了。用弹窗而不是状态栏，
+            // 因为紧接着的列表重载会把状态文本覆盖掉。
+            AlertDialog.Builder(this)
+                .setTitle("无法启动")
+                .setMessage("${app.packageName} 当前没有可用的启动入口（不是桌面应用，或已被停用 / 卸载）。列表已刷新。")
+                .setPositiveButton("关闭", null)
+                .show()
+            loadInstalledApps()
+            return
+        }
+        intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        val result = runCatching { startActivity(intent) }
+        val ok = result.isSuccess
+        val msg = if (ok) {
+            "已启动 ${app.appName}（${app.packageName}）"
+        } else {
+            "启动失败：${app.packageName} — ${result.exceptionOrNull()?.message}"
+        }
+        setStatus(msg, ok)
     }
 
     // ---------------- 详情与安装 ----------------

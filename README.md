@@ -1,8 +1,9 @@
 # XAPK Installer
 
 在 Android 设备上**扫描并安装 XAPK** 的小工具。安装前会先做一次 ABI 兼容性预检，能装的直接装，装不了的明确告诉你为什么。
+顺带可以列出设备上**已安装应用的包名**，并按系统 / 用户筛选。
 
-界面和文档都是中文。定位是「只做一件事」：把设备上已有的 `.xapk` 装上去。
+界面和文档都是中文。定位是「只管安装这一件事」：把设备上已有的 `.xapk` 装上去。
 
 - 许可证：MIT
 - 最低系统：Android 8.0（API 26）
@@ -10,14 +11,28 @@
 
 <table>
   <tr>
-    <td width="33%"><img src="screenshots/02-scan.png" alt="扫描结果"></td>
-    <td width="33%"><img src="screenshots/03-detail.png" alt="详情与 ABI 预检"></td>
-    <td width="33%"><img src="screenshots/05-installing.png" alt="安装完成"></td>
+    <td width="50%"><img src="screenshots/01-launch.png" alt="主界面"></td>
+    <td width="50%"><img src="screenshots/02-scan.png" alt="扫描结果"></td>
   </tr>
   <tr>
+    <td align="center">主界面</td>
     <td align="center">扫描结果</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="screenshots/03-detail.png" alt="详情与 ABI 预检"></td>
+    <td width="50%"><img src="screenshots/05-installing.png" alt="安装完成"></td>
+  </tr>
+  <tr>
     <td align="center">详情与 ABI 预检</td>
     <td align="center">安装完成</td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="screenshots/07-installed-apps-filter.png" alt="已安装应用（按用户筛选）"></td>
+    <td width="50%"><img src="screenshots/08-installed-apps-open.png" alt="已安装应用（可直接打开）"></td>
+  </tr>
+  <tr>
+    <td align="center">已安装应用（按用户筛选）</td>
+    <td align="center">已安装应用（可直接打开）</td>
   </tr>
 </table>
 
@@ -40,13 +55,15 @@ XAPK 本质是个 zip，里面装着 base apk + 若干 split apk（按 ABI、屏
 - **ABI 兼容性预检**：装之前先判断这个包在当前设备上能不能跑
 - 流式安装，不解压到磁盘
 - 安装进度与结果反馈
+- 列出设备上**已安装应用的包名**（含应用名与版本），可按「全部 / 系统 / 用户」筛选
+- 已安装列表里可直接**打开**有桌面图标的应用；没有入口的（后台服务、overlay 等）显示「无启动入口」
 
 ## 系统要求
 
 | 项 | 要求 |
 | --- | --- |
 | Android | 8.0（API 26）及以上 |
-| 权限 | 「所有文件访问」+「安装未知应用」 |
+| 权限 | 「所有文件访问」+「安装未知应用」。列包名用的 `QUERY_ALL_PACKAGES` 属安装时自动授予，无需用户操作 |
 | 构建 | JDK 17 及以上、Android SDK Platform 35 |
 
 构建工具链版本：AGP 8.9.2、Kotlin 2.0.21、Gradle 8.11.1、compileSdk / targetSdk 35。
@@ -116,6 +133,11 @@ keyPassword=你的密钥口令
 4. 点列表里的条目看详情：包名、版本、split 清单、ABI 预检结论
 5. 点「安装」，然后在**系统弹出的确认界面**上确认
 
+点顶部的「已安装应用」可以切到另一个列表：设备上所有已安装应用的包名（每项附应用名与版本），
+用「全部 / 系统 / 用户」三个按钮筛选。每行右侧的「打开」按钮会直接启动该应用
+（`getLaunchIntentForPackage()` 有结果才显示）；纯后台组件没有桌面入口，那里显示「无启动入口」。
+这一页不需要任何权限。
+
 第 5 步的确认界面是必须的：非系统应用无法静默安装，这是 Android 的硬性限制。ABI 预检不通过时按钮会变成「仍要尝试」，需要二次确认才会提交（万一是预检判断有偏差）。
 
 ## 工作原理
@@ -177,9 +199,37 @@ STATUS_PENDING_USER_ACTION = -1   // 不是错误，是「等用户确认」
 Activity 恢复**之前**到达，静态 listener 已经被清空就会丢结果。所以结果需要先暂存，
 下次 `onResume` 补收。
 
+### 列已安装应用为什么要声明 QUERY_ALL_PACKAGES
+
+Android 11（API 30）起官方引入了[包可见性过滤](https://developer.android.com/training/package-visibility)：
+targetSdk ≥ 30 的应用若既没声明 `QUERY_ALL_PACKAGES` 也没写 `<queries>`，
+查询其他应用信息的 API 只返回**过滤后的子集**（官方文档点名举例 `getInstalledApplications()`）。
+本工具要列的正是完整包名清单，所以声明了这个权限。
+
+`getInstalledPackages()` 与 `adb shell pm list packages` 的口径**不一样**。
+本机实测（MuMu Player Pro / Android 12，73 个 vs 67 个）：
+
+| 口径 | 数量 |
+| --- | --- |
+| `getInstalledPackages(0)` / `getInstalledApplications(0)` | 73 |
+| `adb shell pm list packages` | 67 |
+| `pm list packages -s`（系统） | 62 |
+| `pm list packages -3`（第三方） | 5 |
+
+差额来自 `pm list packages` 默认不列的 6 个包：5 个 `/system/product/overlay/` 下的
+DisplayCutout overlay，加 1 个 MuMu 自己的 priv-app。界面上「共 73 个 · 系统 68 · 用户 5」
+就是这么来的；其中「用户」那一档与 `pm list packages -3` 的包名逐字一致。
+
+⚠ 同一轮实测还有一个**反直觉的结果**：这台 MuMu 上包可见性过滤**没有生效**——
+声明与不声明 `QUERY_ALL_PACKAGES`、`getInstalledPackages()` 与 `getInstalledApplications()`，
+四种组合都返回同样的 73 个包（含一次卸载重装以排除权限授予残留）。
+也就是说**在这台模拟器上无法验证该权限的作用**。保留声明是依据官方行为、针对真机：
+真机上不加会漏包。另外 Google Play 上架时使用该权限需单独申请，本工具未上架。
+
 ## 已知限制
 
 - **只识别 `.xapk`**。单个 `.apk` 不在扫描范围内——那种包用系统的「安装未知应用」流程就能装
+- 已安装应用列表只能读和启动：没有卸载 / 停用 / 复制包名等操作；「打开」也只能启动有 `ACTION_MAIN` + `CATEGORY_LAUNCHER` 入口的应用
 - **不能自选目录**，扫描根目录固定为外部存储根目录（递归深度上限 8）
 - **不校验签名、不做完整性校验**。装不装得上完全由系统 PackageInstaller 判定
 - **不合并 split**，没有「导出 universal APK」这类功能
@@ -200,7 +250,9 @@ app/src/main/
 │   ├── AbiCompat.kt               ABI 兼容性预检
 │   ├── XapkInstaller.kt           用 PackageInstaller Session API 安装
 │   ├── InstallResultReceiver.kt   安装结果回调（含 PENDING_USER_ACTION 处理）
-│   └── XapkListAdapter.kt         列表适配器
+│   ├── XapkListAdapter.kt         xapk 列表适配器
+│   ├── InstalledApp.kt            已安装应用的模型与读取（InstalledApp / InstalledApps）
+│   └── AppListAdapter.kt          已安装应用列表适配器
 └── res/                           布局、主题、图标
 build.sh                           本机构建脚本（JDK / Gradle 自动定位）
 gradlew · gradle/wrapper/          Gradle Wrapper
